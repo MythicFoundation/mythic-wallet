@@ -4,8 +4,7 @@
   "version": "1.0.0",
   "description": "The official wallet for Mythic L2 — Send, receive, and manage MYTH tokens on the Mythic network.",
   "permissions": [
-    "storage",
-    "activeTab"
+    "storage"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -31,12 +30,6 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_start"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["inpage.js"],
-      "matches": ["<all_urls>"]
     }
   ]
 }
