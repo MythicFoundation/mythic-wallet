@@ -1,21 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Keypair } from '@solana/web3.js';
-import Button from '../components/Button';
+import React, { useState, useEffect, useCallback } from "react";
+import { Keypair } from "@solana/web3.js";
+import Button from "../components/Button";
 import {
   truncateAddress,
   getConnection,
   getBalance,
   sendSol,
-  keypairFromMnemonic,
   NATIVE_TOKEN_SYMBOL,
   NATIVE_TOKEN_NAME,
   NATIVE_TOKEN_MINT,
-  MOCK_TOKENS,
   type NetworkId,
   type TokenBalance,
-} from '../../lib/wallet';
-
-const DEMO_MODE = typeof chrome === 'undefined' || !chrome.storage;
+} from "../../lib/wallet";
 
 interface SendProps {
   address: string;
@@ -24,10 +20,10 @@ interface SendProps {
 }
 
 export default function Send({ address, network, onBack }: SendProps) {
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
-  const [tokens, setTokens] = useState<TokenBalance[]>(DEMO_MODE ? MOCK_TOKENS : []);
-  const [selectedToken, setSelectedToken] = useState<TokenBalance>(DEMO_MODE ? MOCK_TOKENS[0] : {
+  const [recipient, setRecipient] = useState("");
+  const [amount, setAmount] = useState("");
+  const [tokens, setTokens] = useState<TokenBalance[]>([]);
+  const [selectedToken, setSelectedToken] = useState<TokenBalance>({
     symbol: NATIVE_TOKEN_SYMBOL,
     name: NATIVE_TOKEN_NAME,
     mint: NATIVE_TOKEN_MINT,
@@ -39,16 +35,18 @@ export default function Send({ address, network, onBack }: SendProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const [txSignature, setTxSignature] = useState('');
-  const [error, setError] = useState('');
-  const [loadingBalance, setLoadingBalance] = useState(!DEMO_MODE);
+  const [txSignature, setTxSignature] = useState("");
+  const [error, setError] = useState("");
+  const [loadingBalance, setLoadingBalance] = useState(true);
 
   const estimatedFee = 0.000005;
-  const isValid = recipient.length >= 32 && parseFloat(amount) > 0 && parseFloat(amount) <= selectedToken.balance;
+  const isValid =
+    recipient.length >= 32 &&
+    parseFloat(amount) > 0 &&
+    parseFloat(amount) <= selectedToken.balance;
 
   // Fetch real balance on mount
   useEffect(() => {
-    if (DEMO_MODE) return;
     (async () => {
       try {
         const connection = getConnection(network);
@@ -82,48 +80,42 @@ export default function Send({ address, network, onBack }: SendProps) {
 
   const handleSend = async () => {
     setSending(true);
-    setError('');
-
-    if (DEMO_MODE) {
-      // Simulate in demo mode
-      await new Promise((r) => setTimeout(r, 2000));
-      setTxSignature('demo...signature');
-      setSending(false);
-      setSent(true);
-      setTimeout(onBack, 2000);
-      return;
-    }
+    setError("");
 
     try {
-      // Get mnemonic from chrome.storage to derive keypair
-      const { decryptData } = await import('../../lib/storage');
-      const result = await chrome.storage.local.get('mythic_wallet');
-      const wallet = result.mythic_wallet;
-      if (!wallet?.encryptedMnemonic) {
-        throw new Error('Wallet not found');
-      }
-
-      const sessionResult = await chrome.storage.session.get('mythic_session_key');
+      // Get session keypair from chrome.storage.session
+      const sessionResult = await chrome.storage.session.get(
+        "mythic_session_key"
+      );
       let keypair: Keypair;
 
       if (sessionResult.mythic_session_key) {
         // Secret key stored in session during unlock
-        const secretKeyArray = new Uint8Array(Object.values(sessionResult.mythic_session_key));
+        const secretKeyArray = new Uint8Array(
+          Object.values(sessionResult.mythic_session_key)
+        );
         keypair = Keypair.fromSecretKey(secretKeyArray);
       } else {
-        // Fallback: prompt isn't possible in popup, so we error
-        throw new Error('Session expired. Please lock and unlock your wallet to re-authenticate.');
+        // Session expired
+        throw new Error(
+          "Session expired. Please lock and unlock your wallet to re-authenticate."
+        );
       }
 
       const connection = getConnection(network);
-      const signature = await sendSol(connection, keypair, recipient, parseFloat(amount));
+      const signature = await sendSol(
+        connection,
+        keypair,
+        recipient,
+        parseFloat(amount)
+      );
       setTxSignature(`${signature.slice(0, 6)}...${signature.slice(-4)}`);
       setSending(false);
       setSent(true);
       setTimeout(onBack, 3000);
     } catch (err: any) {
       setSending(false);
-      setError(err?.message || 'Transaction failed');
+      setError(err?.message || "Transaction failed");
     }
   };
 
@@ -131,16 +123,31 @@ export default function Send({ address, network, onBack }: SendProps) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-6">
         <div className="w-16 h-16 flex items-center justify-center bg-success/10 mb-4">
-          <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          <svg
+            className="w-8 h-8 text-success"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5 13l4 4L19 7"
+            />
           </svg>
         </div>
-        <h2 className="font-display text-xl font-bold text-text-heading mb-2">Transaction Sent</h2>
+        <h2 className="font-display text-xl font-bold text-text-heading mb-2">
+          Transaction Sent
+        </h2>
         <p className="text-sm text-text-muted text-center">
-          {amount} {selectedToken.symbol} sent to {truncateAddress(recipient, 6)}
+          {amount} {selectedToken.symbol} sent to{" "}
+          {truncateAddress(recipient, 6)}
         </p>
         {txSignature && (
-          <p className="text-[10px] text-text-muted font-mono mt-2">{txSignature}</p>
+          <p className="text-[10px] text-text-muted font-mono mt-2">
+            {txSignature}
+          </p>
         )}
       </div>
     );
@@ -150,32 +157,55 @@ export default function Send({ address, network, onBack }: SendProps) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-subtle">
-          <button onClick={() => setShowConfirm(false)} className="p-1 hover:bg-surface-hover">
-            <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          <button
+            onClick={() => setShowConfirm(false)}
+            className="p-1 hover:bg-surface-hover"
+          >
+            <svg
+              className="w-5 h-5 text-text-muted"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
           </button>
-          <h2 className="font-display text-base font-bold">Confirm Transaction</h2>
+          <h2 className="font-display text-base font-bold">
+            Confirm Transaction
+          </h2>
         </div>
 
         <div className="flex-1 px-4 pt-6">
           <div className="bg-surface-elevated border border-subtle p-4 mb-4">
             <div className="flex justify-between mb-3">
               <span className="text-xs text-text-muted">From</span>
-              <span className="font-mono text-xs text-text-body">{truncateAddress(address, 6)}</span>
+              <span className="font-mono text-xs text-text-body">
+                {truncateAddress(address, 6)}
+              </span>
             </div>
             <div className="flex justify-between mb-3">
               <span className="text-xs text-text-muted">To</span>
-              <span className="font-mono text-xs text-text-body">{truncateAddress(recipient, 6)}</span>
+              <span className="font-mono text-xs text-text-body">
+                {truncateAddress(recipient, 6)}
+              </span>
             </div>
             <div className="border-t border-subtle my-3" />
             <div className="flex justify-between mb-3">
               <span className="text-xs text-text-muted">Amount</span>
-              <span className="font-mono text-sm font-semibold text-text-heading">{amount} {selectedToken.symbol}</span>
+              <span className="font-mono text-sm font-semibold text-text-heading">
+                {amount} {selectedToken.symbol}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-xs text-text-muted">Network Fee</span>
-              <span className="font-mono text-xs text-text-body">~{estimatedFee} {NATIVE_TOKEN_SYMBOL}</span>
+              <span className="font-mono text-xs text-text-body">
+                ~{estimatedFee} {NATIVE_TOKEN_SYMBOL}
+              </span>
             </div>
           </div>
 
@@ -187,17 +217,38 @@ export default function Send({ address, network, onBack }: SendProps) {
         </div>
 
         <div className="px-4 pb-4">
-          <Button variant="primary" fullWidth size="lg" onClick={handleSend} disabled={sending}>
+          <Button
+            variant="primary"
+            fullWidth
+            size="lg"
+            onClick={handleSend}
+            disabled={sending}
+          >
             {sending ? (
               <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <svg
+                  className="w-4 h-4 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
                 </svg>
                 Sending...
               </span>
             ) : (
-              'Confirm & Send'
+              "Confirm & Send"
             )}
           </Button>
         </div>
@@ -210,8 +261,18 @@ export default function Send({ address, network, onBack }: SendProps) {
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-subtle">
         <button onClick={onBack} className="p-1 hover:bg-surface-hover">
-          <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          <svg
+            className="w-5 h-5 text-text-muted"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
         </button>
         <h2 className="font-display text-base font-bold">Send</h2>
@@ -220,7 +281,9 @@ export default function Send({ address, network, onBack }: SendProps) {
       <div className="flex-1 px-4 pt-4 space-y-4">
         {/* Token Selector */}
         <div>
-          <label className="block text-xs text-text-muted mb-1.5 font-sans">Token</label>
+          <label className="block text-xs text-text-muted mb-1.5 font-sans">
+            Token
+          </label>
           {loadingBalance ? (
             <div className="w-full bg-surface-elevated border border-subtle px-3 py-2.5 text-sm text-text-muted">
               Loading balances...
@@ -236,7 +299,10 @@ export default function Send({ address, network, onBack }: SendProps) {
             >
               {tokens.map((t) => (
                 <option key={t.symbol} value={t.symbol}>
-                  {t.symbol} — {t.balance.toLocaleString('en-US', { maximumFractionDigits: 6 })}
+                  {t.symbol} —{" "}
+                  {t.balance.toLocaleString("en-US", {
+                    maximumFractionDigits: 6,
+                  })}
                 </option>
               ))}
             </select>
@@ -245,7 +311,9 @@ export default function Send({ address, network, onBack }: SendProps) {
 
         {/* Recipient */}
         <div>
-          <label className="block text-xs text-text-muted mb-1.5 font-sans">Recipient Address</label>
+          <label className="block text-xs text-text-muted mb-1.5 font-sans">
+            Recipient Address
+          </label>
           <input
             type="text"
             value={recipient}
@@ -259,7 +327,10 @@ export default function Send({ address, network, onBack }: SendProps) {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-xs text-text-muted font-sans">Amount</label>
-            <button onClick={handleMax} className="text-[10px] text-rose font-display font-semibold hover:text-rose-light">
+            <button
+              onClick={handleMax}
+              className="text-[10px] text-rose font-display font-semibold hover:text-rose-light"
+            >
               MAX
             </button>
           </div>
@@ -280,7 +351,9 @@ export default function Send({ address, network, onBack }: SendProps) {
         {/* Fee */}
         <div className="bg-surface-elevated border border-subtle px-3 py-2 flex justify-between">
           <span className="text-xs text-text-muted">Estimated Fee</span>
-          <span className="text-xs font-mono text-text-body">~{estimatedFee} {NATIVE_TOKEN_SYMBOL}</span>
+          <span className="text-xs font-mono text-text-body">
+            ~{estimatedFee} {NATIVE_TOKEN_SYMBOL}
+          </span>
         </div>
 
         {error && (
@@ -291,7 +364,16 @@ export default function Send({ address, network, onBack }: SendProps) {
       </div>
 
       <div className="px-4 pb-4">
-        <Button variant="primary" fullWidth size="lg" disabled={!isValid} onClick={() => { setError(''); setShowConfirm(true); }}>
+        <Button
+          variant="primary"
+          fullWidth
+          size="lg"
+          disabled={!isValid}
+          onClick={() => {
+            setError("");
+            setShowConfirm(true);
+          }}
+        >
           Review Transaction
         </Button>
       </div>

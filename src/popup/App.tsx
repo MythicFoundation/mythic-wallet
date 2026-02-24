@@ -12,31 +12,22 @@ import { keypairFromMnemonic } from "../lib/wallet";
 
 type Page = "home" | "send" | "receive" | "settings" | "bridge";
 
-// Demo mode: skip chrome.storage for development
-const DEMO_MODE = typeof chrome === "undefined" || !chrome.storage;
-const DEMO_ADDRESS = "DLB2NZ5PSNAoChQAaUCBwoHCf6vzeStDa6kCYbB8HjSg";
-
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [hasWallet, setHasWallet] = useState<boolean | null>(null);
   const [isLocked, setIsLocked] = useState(false);
-  const [address, setAddress] = useState(DEMO_ADDRESS);
-  const [network, setNetwork] = useState<NetworkId>("mythic-testnet");
+  const [address, setAddress] = useState("");
+  const [network, setNetwork] = useState<NetworkId>("mythic-mainnet");
   const [connectedSites, setConnectedSites] = useState<string[]>([]);
 
   useEffect(() => {
-    if (DEMO_MODE) {
-      setHasWallet(true);
-      setIsLocked(false);
-      return;
-    }
-    // Check stored state
+    // Check stored state from chrome.storage
     chrome.storage.local.get("mythic_state", (result) => {
       const state = result.mythic_state;
       if (state && state.hasWallet) {
         setHasWallet(true);
         setIsLocked(state.isLocked);
-        setNetwork(state.activeNetwork || "mythic-testnet");
+        setNetwork(state.activeNetwork || "mythic-mainnet");
         setConnectedSites(state.connectedSites || []);
       } else {
         setHasWallet(false);
@@ -100,10 +91,6 @@ export default function App() {
       <div className="h-full bg-surface-base">
         <Lock
           onUnlock={async (password) => {
-            if (DEMO_MODE) {
-              setIsLocked(false);
-              return true;
-            }
             try {
               const { unlockWallet } = await import("../lib/storage");
               const mnemonic = await unlockWallet(password);
@@ -127,43 +114,54 @@ export default function App() {
     );
   }
 
+  // Waiting for address to load from storage
+  if (!address) {
+    return (
+      <div className="flex items-center justify-center h-full bg-surface-base">
+        <svg
+          viewBox="0 0 100 100"
+          className="w-12 h-12 animate-pulse"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <polygon points="50,8 20,44 50,56" fill="#FF2D78" opacity="0.92" />
+          <polygon points="50,8 80,44 50,56" fill="#FF5C96" opacity="0.78" />
+          <polygon points="20,44 50,56 80,44 50,92" fill="#CC2460" opacity="0.88" />
+        </svg>
+      </div>
+    );
+  }
+
   const handleLock = () => {
     setIsLocked(true);
     setPage("home");
-    if (!DEMO_MODE) {
-      chrome.storage.session?.remove("mythic_session_key").catch(() => {});
-      chrome.storage.local.get("mythic_state", (result) => {
-        const state = result.mythic_state || {};
-        chrome.storage.local.set({
-          mythic_state: { ...state, isLocked: true },
-        });
+    chrome.storage.session?.remove("mythic_session_key").catch(() => {});
+    chrome.storage.local.get("mythic_state", (result) => {
+      const state = result.mythic_state || {};
+      chrome.storage.local.set({
+        mythic_state: { ...state, isLocked: true },
       });
-    }
+    });
   };
 
   const handleNetworkChange = (newNetwork: NetworkId) => {
     setNetwork(newNetwork);
-    if (!DEMO_MODE) {
-      chrome.storage.local.get("mythic_state", (result) => {
-        const state = result.mythic_state || {};
-        chrome.storage.local.set({
-          mythic_state: { ...state, activeNetwork: newNetwork },
-        });
+    chrome.storage.local.get("mythic_state", (result) => {
+      const state = result.mythic_state || {};
+      chrome.storage.local.set({
+        mythic_state: { ...state, activeNetwork: newNetwork },
       });
-    }
+    });
   };
 
   const handleDisconnectSite = (site: string) => {
     const updated = connectedSites.filter((s) => s !== site);
     setConnectedSites(updated);
-    if (!DEMO_MODE) {
-      chrome.storage.local.get("mythic_state", (result) => {
-        const state = result.mythic_state || {};
-        chrome.storage.local.set({
-          mythic_state: { ...state, connectedSites: updated },
-        });
+    chrome.storage.local.get("mythic_state", (result) => {
+      const state = result.mythic_state || {};
+      chrome.storage.local.set({
+        mythic_state: { ...state, connectedSites: updated },
       });
-    }
+    });
   };
 
   const renderPage = () => {

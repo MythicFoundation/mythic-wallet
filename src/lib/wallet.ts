@@ -129,39 +129,5 @@ export async function sendMyth(
   return signature;
 }
 
-// Keep backwards compat alias
+// Backwards compat alias
 export const sendSol = sendMyth;
-
-// Demo mock data
-export const MOCK_TOKENS: TokenBalance[] = [
-  {
-    symbol: "MYTH",
-    name: "Mythic",
-    mint: "native",
-    balance: 142.58,
-    usdValue: 0,
-    icon: "MYTH",
-    change24h: 0,
-  },
-];
-
-export const MOCK_TRANSACTIONS: TransactionRecord[] = [
-  {
-    signature: "5KtPn1...3xYm",
-    type: "receive",
-    amount: 25.0,
-    symbol: "MYTH",
-    from: "7nYB...4kPq",
-    timestamp: Date.now() - 1000 * 60 * 30,
-    status: "confirmed",
-  },
-  {
-    signature: "3mWqR...7nLk",
-    type: "send",
-    amount: 10.5,
-    symbol: "MYTH",
-    to: "DLB2...HjSg",
-    timestamp: Date.now() - 1000 * 60 * 60 * 2,
-    status: "confirmed",
-  },
-];

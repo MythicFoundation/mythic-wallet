@@ -17,9 +17,7 @@ import {
   type NetworkId,
 } from "../../lib/wallet";
 
-const DEMO_MODE = typeof chrome === "undefined" || !chrome.storage;
-
-// Bridge program on L1 (Solana mainnet / devnet)
+// Bridge program on L1 (Solana mainnet)
 const L1_BRIDGE_PROGRAM_ID = new PublicKey(
   "oEQfREm4FQkaVeRoxJHkJLB1feHprrntY6eJuW2zbqQ"
 );
@@ -32,11 +30,14 @@ const L2_BRIDGE_PROGRAM_ID = new PublicKey(
 // PDA seeds
 const BRIDGE_CONFIG_SEED = Buffer.from("bridge_config");
 const SOL_VAULT_SEED = Buffer.from("sol_vault");
+const L2_BRIDGE_CONFIG_SEED = Buffer.from("l2_bridge_config");
+const BRIDGE_RESERVE_SEED = Buffer.from("bridge_reserve");
 
 // Instruction discriminators
 const IX_DEPOSIT_SOL = 2;
+const IX_BRIDGE_TO_L1 = 3;
 
-// Solana L1 RPC (devnet for testing, mainnet for production)
+// Solana L1 RPC
 const L1_RPC_URL = "https://api.mainnet-beta.solana.com";
 
 type BridgeDirection = "deposit" | "withdraw";
@@ -52,7 +53,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
   const [amount, setAmount] = useState("");
   const [l2Balance, setL2Balance] = useState(0);
   const [l1Balance, setL1Balance] = useState(0);
-  const [loadingBalances, setLoadingBalances] = useState(!DEMO_MODE);
+  const [loadingBalances, setLoadingBalances] = useState(true);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [txSignature, setTxSignature] = useState("");
@@ -64,11 +65,6 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
 
   // Fetch balances on both networks
   const fetchBalances = useCallback(async () => {
-    if (DEMO_MODE) {
-      setL2Balance(142.58);
-      setL1Balance(5.25);
-      return;
-    }
     try {
       // L2 balance
       const l2Connection = getConnection(network);
@@ -152,14 +148,6 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
     setSending(true);
     setError("");
 
-    if (DEMO_MODE) {
-      await new Promise((r) => setTimeout(r, 2500));
-      setTxSignature("demo...bridge...sig");
-      setSending(false);
-      setSent(true);
-      return;
-    }
-
     try {
       if (direction === "deposit") {
         // Build deposit transaction targeting L1 bridge
@@ -193,30 +181,44 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
           `${signature.slice(0, 8)}...${signature.slice(-6)}`
         );
       } else {
-        // Withdraw: send SOL to the L2 bridge program reserve
-        // The relayer picks up BurnSOL events and initiates L1 withdrawals
+        // Withdraw: build BridgeToL1 instruction on the L2 bridge program
         const l2Connection = getConnection(network);
         const depositorPubkey = new PublicKey(address);
 
-        // Simple system transfer to the L2 bridge reserve PDA
-        // The bridge-l2 program processes this as a burn/withdraw request
-        const lamports = Math.round(amountNum * LAMPORTS_PER_SOL);
-
-        // For now, send to the bridge reserve PDA
+        // Derive L2 bridge PDAs
         const [reservePda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("bridge_reserve")],
+          [BRIDGE_RESERVE_SEED],
+          L2_BRIDGE_PROGRAM_ID
+        );
+        const [l2ConfigPda] = PublicKey.findProgramAddressSync(
+          [L2_BRIDGE_CONFIG_SEED],
           L2_BRIDGE_PROGRAM_ID
         );
 
-        const tx = new Transaction().add(
-          SystemProgram.transfer({
-            fromPubkey: depositorPubkey,
-            toPubkey: reservePda,
-            lamports,
-          })
-        );
+        const lamports = Math.round(amountNum * LAMPORTS_PER_SOL);
+        // Align to 1000 (L2 9 decimals -> L1 6 decimals scaling factor)
+        const alignedLamports = lamports - (lamports % 1000);
+
+        // BridgeToL1: [discriminator(1)] [amount(8)] [l1_recipient(32)]
+        const data = Buffer.alloc(1 + 8 + 32);
+        data.writeUInt8(IX_BRIDGE_TO_L1, 0);
+        data.writeBigUInt64LE(BigInt(alignedLamports), 1);
+        depositorPubkey.toBuffer().copy(data, 9); // l1_recipient = same address
+
+        const bridgeIx = new TransactionInstruction({
+          programId: L2_BRIDGE_PROGRAM_ID,
+          keys: [
+            { pubkey: depositorPubkey, isSigner: true, isWritable: true },
+            { pubkey: reservePda, isSigner: false, isWritable: true },
+            { pubkey: l2ConfigPda, isSigner: false, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          ],
+          data,
+        });
 
         const { blockhash } = await l2Connection.getLatestBlockhash();
+        const tx = new Transaction();
+        tx.add(bridgeIx);
         tx.recentBlockhash = blockhash;
         tx.feePayer = depositorPubkey;
 
@@ -282,7 +284,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
         <p className="text-xs text-text-muted text-center mb-4">
           {direction === "deposit"
             ? "Funds will appear on Mythic L2 within ~2 minutes"
-            : "Withdrawal subject to 7-day challenge period"}
+            : "Withdrawal subject to ~42 hour challenge period"}
         </p>
         {txSignature && (
           <p className="text-[10px] text-text-muted font-mono">{txSignature}</p>
@@ -381,7 +383,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
           {direction === "withdraw" && (
             <div className="bg-[#FF9500]/10 border border-[#FF9500]/20 px-3 py-2 mb-4">
               <p className="text-[10px] text-[#FF9500]">
-                Withdrawals are subject to a 7-day challenge period before funds
+                Withdrawals are subject to a ~42 hour challenge period before funds
                 are released on Solana L1.
               </p>
             </div>
@@ -550,7 +552,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 6,
               })}{" "}
-              MYTH
+              {direction === "deposit" ? "SOL" : "MYTH"}
             </span>
           )}
         </div>
@@ -574,11 +576,11 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
                 setAmount(e.target.value);
                 setError("");
               }}
-              placeholder={`Min ${minDeposit} MYTH`}
+              placeholder={`Min ${minDeposit} ${direction === "deposit" ? "SOL" : "MYTH"}`}
               className="w-full bg-surface-elevated border border-subtle px-3 py-2.5 text-sm font-mono text-text-heading placeholder:text-text-disabled focus:outline-none focus:border-rose pr-14"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted font-display">
-              MYTH
+              {direction === "deposit" ? "SOL" : "MYTH"}
             </span>
           </div>
         </div>
@@ -596,7 +598,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
               {direction === "deposit" ? "Est. Time" : "Challenge Period"}
             </span>
             <span className="text-xs text-text-body font-display">
-              {direction === "deposit" ? "~2 minutes" : "7 days"}
+              {direction === "deposit" ? "~2 minutes" : "~42 hours"}
             </span>
           </div>
         </div>

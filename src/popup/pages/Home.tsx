@@ -10,16 +10,11 @@ import {
   NATIVE_TOKEN_SYMBOL,
   NATIVE_TOKEN_NAME,
   NATIVE_TOKEN_MINT,
-  MOCK_TOKENS,
   KNOWN_MINTS,
-  MOCK_TRANSACTIONS,
   type NetworkId,
   type TokenBalance,
   type TransactionRecord,
 } from "../../lib/wallet";
-
-// Demo mode: skip chrome.storage for development
-const DEMO_MODE = typeof chrome === "undefined" || !chrome.storage;
 
 interface HomeProps {
   address: string;
@@ -39,17 +34,12 @@ export default function Home({
   onBridge,
 }: HomeProps) {
   const [activeTab, setActiveTab] = useState<Tab>("tokens");
-  const [tokens, setTokens] = useState<TokenBalance[]>(
-    DEMO_MODE ? MOCK_TOKENS : []
-  );
-  const [transactions, setTransactions] = useState<TransactionRecord[]>(
-    DEMO_MODE ? MOCK_TRANSACTIONS : []
-  );
-  const [loading, setLoading] = useState(!DEMO_MODE);
+  const [tokens, setTokens] = useState<TokenBalance[]>([]);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(0);
 
   const fetchBalances = useCallback(async () => {
-    if (DEMO_MODE) return;
     try {
       const connection = getConnection(network);
       const nativeBalance = await getBalance(connection, address);
@@ -120,7 +110,6 @@ export default function Home({
   }, [address, network]);
 
   const fetchTransactions = useCallback(async () => {
-    if (DEMO_MODE) return;
     try {
       const connection = getConnection(network);
       const pubkey = new PublicKey(address);
