@@ -63,6 +63,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true);
     try {
       const account = await keypairFromMnemonic(mnemonic);
+      try { await chrome.storage.session.set({ mythic_session_key: Array.from(account.secretKey) }); } catch {}
       await saveWallet(mnemonic, account.publicKey, password);
       onComplete(account.publicKey);
     } catch {
@@ -88,6 +89,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true);
     try {
       const account = await keypairFromMnemonic(importPhrase.trim());
+      try { await chrome.storage.session.set({ mythic_session_key: Array.from(account.secretKey) }); } catch {}
       await saveWallet(importPhrase.trim(), account.publicKey, password);
       onComplete(account.publicKey);
     } catch {

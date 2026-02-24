@@ -20,11 +20,8 @@ export default function App() {
   const [hasWallet, setHasWallet] = useState<boolean | null>(null);
   const [isLocked, setIsLocked] = useState(false);
   const [address, setAddress] = useState(DEMO_ADDRESS);
-  const [network, setNetwork] = useState<NetworkId>('mythic-mainnet');
-  const [connectedSites, setConnectedSites] = useState<string[]>([
-    'mythic.sh',
-    'mythicswap.app',
-  ]);
+  const [network, setNetwork] = useState<NetworkId>('mythic-testnet');
+  const [connectedSites, setConnectedSites] = useState<string[]>([]);
 
   useEffect(() => {
     if (DEMO_MODE) {
@@ -38,7 +35,7 @@ export default function App() {
       if (state && state.hasWallet) {
         setHasWallet(true);
         setIsLocked(state.isLocked);
-        setNetwork(state.activeNetwork || 'mythic-mainnet');
+        setNetwork(state.activeNetwork || 'mythic-testnet');
         setConnectedSites(state.connectedSites || []);
       } else {
         setHasWallet(false);
@@ -94,15 +91,12 @@ export default function App() {
               const { unlockWallet } = await import('../lib/storage');
               const mnemonic = await unlockWallet(password);
               if (mnemonic) {
-                // Store secret key in session storage for Send functionality
                 try {
                   const account = await keypairFromMnemonic(mnemonic);
                   await chrome.storage.session.set({
                     mythic_session_key: Array.from(account.secretKey),
                   });
-                } catch {
-                  // session storage not available, send will require re-auth
-                }
+                } catch {}
                 setIsLocked(false);
                 return true;
               }
@@ -120,7 +114,6 @@ export default function App() {
     setIsLocked(true);
     setPage('home');
     if (!DEMO_MODE) {
-      // Clear session key on lock
       chrome.storage.session?.remove('mythic_session_key').catch(() => {});
       chrome.storage.local.get('mythic_state', (result) => {
         const state = result.mythic_state || {};
@@ -140,7 +133,14 @@ export default function App() {
   };
 
   const handleDisconnectSite = (site: string) => {
-    setConnectedSites((prev) => prev.filter((s) => s !== site));
+    const updated = connectedSites.filter((s) => s !== site);
+    setConnectedSites(updated);
+    if (!DEMO_MODE) {
+      chrome.storage.local.get('mythic_state', (result) => {
+        const state = result.mythic_state || {};
+        chrome.storage.local.set({ mythic_state: { ...state, connectedSites: updated } });
+      });
+    }
   };
 
   const renderPage = () => {
