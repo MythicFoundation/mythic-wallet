@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Mythic Wallet",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "The official wallet for Mythic L2 — Send, receive, and manage MYTH tokens on the Mythic network.",
   "permissions": [
     "storage"
+  ],
+  "host_permissions": [
+    "https://testnet.mythic.sh/*",
+    "https://api.mainnet-beta.solana.com/*",
+    "https://fonts.googleapis.com/*",
+    "https://fonts.gstatic.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -31,5 +37,8 @@
       "js": ["content.js"],
       "run_at": "document_start"
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+  }
 }

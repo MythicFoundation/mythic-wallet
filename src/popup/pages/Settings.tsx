@@ -196,7 +196,7 @@ export default function Settings({
 
         {/* Version */}
         <div className="px-4 pb-4 text-center">
-          <p className="text-[10px] text-text-disabled">Mythic Wallet v1.0.0</p>
+          <p className="text-[10px] text-text-disabled">Mythic Wallet v1.1.0</p>
         </div>
       </div>
     </div>

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import TokenList from '../components/TokenList';
-import TransactionItem from '../components/TransactionItem';
-import Button from '../components/Button';
+import React, { useState, useEffect, useCallback } from "react";
+import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import TokenList from "../components/TokenList";
+import TransactionItem from "../components/TransactionItem";
+import Button from "../components/Button";
 import {
   getConnection,
   getBalance,
@@ -11,28 +11,40 @@ import {
   NATIVE_TOKEN_NAME,
   NATIVE_TOKEN_MINT,
   MOCK_TOKENS,
+  KNOWN_MINTS,
   MOCK_TRANSACTIONS,
   type NetworkId,
   type TokenBalance,
   type TransactionRecord,
-} from '../../lib/wallet';
+} from "../../lib/wallet";
 
 // Demo mode: skip chrome.storage for development
-const DEMO_MODE = typeof chrome === 'undefined' || !chrome.storage;
+const DEMO_MODE = typeof chrome === "undefined" || !chrome.storage;
 
 interface HomeProps {
   address: string;
   network: NetworkId;
   onSend: () => void;
   onReceive: () => void;
+  onBridge: () => void;
 }
 
-type Tab = 'tokens' | 'activity';
+type Tab = "tokens" | "activity";
 
-export default function Home({ address, network, onSend, onReceive }: HomeProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('tokens');
-  const [tokens, setTokens] = useState<TokenBalance[]>(DEMO_MODE ? MOCK_TOKENS : []);
-  const [transactions, setTransactions] = useState<TransactionRecord[]>(DEMO_MODE ? MOCK_TRANSACTIONS : []);
+export default function Home({
+  address,
+  network,
+  onSend,
+  onReceive,
+  onBridge,
+}: HomeProps) {
+  const [activeTab, setActiveTab] = useState<Tab>("tokens");
+  const [tokens, setTokens] = useState<TokenBalance[]>(
+    DEMO_MODE ? MOCK_TOKENS : []
+  );
+  const [transactions, setTransactions] = useState<TransactionRecord[]>(
+    DEMO_MODE ? MOCK_TRANSACTIONS : []
+  );
   const [loading, setLoading] = useState(!DEMO_MODE);
   const [lastRefresh, setLastRefresh] = useState(0);
 
@@ -57,9 +69,12 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
       // Try to fetch SPL token accounts
       try {
         const pubkey = new PublicKey(address);
-        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
-          programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-        });
+        const tokenAccounts =
+          await connection.getParsedTokenAccountsByOwner(pubkey, {
+            programId: new PublicKey(
+              "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+            ),
+          });
 
         for (const { account } of tokenAccounts.value) {
           const parsed = account.data.parsed?.info;
@@ -69,15 +84,9 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
           if (balance === 0) continue;
 
           // Map known mints to names
-          let symbol = truncateAddress(mint, 4);
-          let name = 'Unknown Token';
-          if (mint === 'MythToken1111111111111111111111111111111111' || mint === '7Hmyi9v4itEt49xo1fpTgHk1ytb8MZft7RBATBgb1pnf') {
-            symbol = 'MYTH';
-            name = 'Mythic Token';
-          } else if (mint === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') {
-            symbol = 'USDC';
-            name = 'USD Coin';
-          }
+          const known = KNOWN_MINTS[mint];
+          const symbol = known ? known.symbol : truncateAddress(mint, 4);
+          const name = known ? known.name : "Unknown Token";
 
           tokenList.push({
             symbol,
@@ -95,16 +104,18 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
 
       setTokens(tokenList);
     } catch {
-      // RPC error — show empty state
-      setTokens([{
-        symbol: NATIVE_TOKEN_SYMBOL,
-        name: NATIVE_TOKEN_NAME,
-        mint: NATIVE_TOKEN_MINT,
-        balance: 0,
-        usdValue: 0,
-        icon: NATIVE_TOKEN_SYMBOL,
-        change24h: 0,
-      }]);
+      // RPC error -- show empty state
+      setTokens([
+        {
+          symbol: NATIVE_TOKEN_SYMBOL,
+          name: NATIVE_TOKEN_NAME,
+          mint: NATIVE_TOKEN_MINT,
+          balance: 0,
+          usdValue: 0,
+          icon: NATIVE_TOKEN_SYMBOL,
+          change24h: 0,
+        },
+      ]);
     }
   }, [address, network]);
 
@@ -113,7 +124,9 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
     try {
       const connection = getConnection(network);
       const pubkey = new PublicKey(address);
-      const signatures = await connection.getSignaturesForAddress(pubkey, { limit: 10 });
+      const signatures = await connection.getSignaturesForAddress(pubkey, {
+        limit: 10,
+      });
 
       if (signatures.length === 0) {
         setTransactions([]);
@@ -123,20 +136,23 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
       const txRecords: TransactionRecord[] = signatures.map((sig) => {
         return {
           signature: `${sig.signature.slice(0, 6)}...${sig.signature.slice(-4)}`,
-          type: 'unknown' as const,
+          type: "unknown" as const,
           amount: 0,
           symbol: NATIVE_TOKEN_SYMBOL,
           timestamp: (sig.blockTime ?? Math.floor(Date.now() / 1000)) * 1000,
-          status: sig.err ? 'failed' as const : 'confirmed' as const,
+          status: sig.err ? ("failed" as const) : ("confirmed" as const),
         };
       });
 
       // Try to fetch parsed details for each transaction
       const fullSignatures = signatures.map((s) => s.signature);
       try {
-        const parsedTxs = await connection.getParsedTransactions(fullSignatures, {
-          maxSupportedTransactionVersion: 0,
-        });
+        const parsedTxs = await connection.getParsedTransactions(
+          fullSignatures,
+          {
+            maxSupportedTransactionVersion: 0,
+          }
+        );
 
         for (let i = 0; i < parsedTxs.length; i++) {
           const parsed = parsedTxs[i];
@@ -144,7 +160,11 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
 
           const instructions = parsed.transaction.message.instructions;
           for (const ix of instructions) {
-            if ('parsed' in ix && ix.program === 'system' && ix.parsed?.type === 'transfer') {
+            if (
+              "parsed" in ix &&
+              ix.program === "system" &&
+              ix.parsed?.type === "transfer"
+            ) {
               const info = ix.parsed.info;
               const lamports = info.lamports ?? 0;
               const amount = lamports / LAMPORTS_PER_SOL;
@@ -154,14 +174,14 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
               if (source === address) {
                 txRecords[i] = {
                   ...txRecords[i],
-                  type: 'send',
+                  type: "send",
                   amount,
                   to: truncateAddress(dest, 4),
                 };
               } else if (dest === address) {
                 txRecords[i] = {
                   ...txRecords[i],
-                  type: 'receive',
+                  type: "receive",
                   amount,
                   from: truncateAddress(source, 4),
                 };
@@ -201,22 +221,44 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
       {/* Balance Section */}
       <div className="px-4 pt-5 pb-4 bg-surface-card border-b border-subtle">
         <div className="text-center">
-          <p className="text-xs text-text-muted font-sans mb-1">{NATIVE_TOKEN_SYMBOL} Balance</p>
+          <p className="text-xs text-text-muted font-sans mb-1">
+            {NATIVE_TOKEN_SYMBOL} Balance
+          </p>
           {loading ? (
             <div className="flex items-center justify-center h-10">
-              <svg className="w-5 h-5 animate-spin text-text-muted" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              <svg
+                className="w-5 h-5 animate-spin text-text-muted"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
               </svg>
             </div>
           ) : (
             <>
               <h1 className="font-display text-3xl font-bold text-text-heading">
-                {nativeBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {NATIVE_TOKEN_SYMBOL}
+                {nativeBalance.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 4,
+                })}{" "}
+                {NATIVE_TOKEN_SYMBOL}
               </h1>
               {tokens.length > 1 && (
                 <p className="text-xs text-text-muted mt-1 font-mono">
-                  + {tokens.length - 1} other token{tokens.length - 1 > 1 ? 's' : ''}
+                  + {tokens.length - 1} other token
+                  {tokens.length - 1 > 1 ? "s" : ""}
                 </p>
               )}
             </>
@@ -224,21 +266,59 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 mt-4">
+        <div className="flex gap-2 mt-4">
           <Button variant="primary" fullWidth onClick={onSend}>
             <span className="flex items-center justify-center gap-1.5">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 10l7-7m0 0l7 7m-7-7v18"
+                />
               </svg>
               Send
             </span>
           </Button>
           <Button variant="secondary" fullWidth onClick={onReceive}>
             <span className="flex items-center justify-center gap-1.5">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                />
               </svg>
               Receive
+            </span>
+          </Button>
+          <Button variant="secondary" fullWidth onClick={onBridge}>
+            <span className="flex items-center justify-center gap-1.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"
+                />
+              </svg>
+              Bridge
             </span>
           </Button>
         </div>
@@ -247,21 +327,21 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
       {/* Tabs */}
       <div className="flex border-b border-subtle">
         <button
-          onClick={() => setActiveTab('tokens')}
+          onClick={() => setActiveTab("tokens")}
           className={`flex-1 py-2.5 text-sm font-display font-semibold transition-colors ${
-            activeTab === 'tokens'
-              ? 'text-rose border-b-2 border-rose'
-              : 'text-text-muted hover:text-text-body'
+            activeTab === "tokens"
+              ? "text-rose border-b-2 border-rose"
+              : "text-text-muted hover:text-text-body"
           }`}
         >
           Tokens
         </button>
         <button
-          onClick={() => setActiveTab('activity')}
+          onClick={() => setActiveTab("activity")}
           className={`flex-1 py-2.5 text-sm font-display font-semibold transition-colors ${
-            activeTab === 'activity'
-              ? 'text-rose border-b-2 border-rose'
-              : 'text-text-muted hover:text-text-body'
+            activeTab === "activity"
+              ? "text-rose border-b-2 border-rose"
+              : "text-text-muted hover:text-text-body"
           }`}
         >
           Activity
@@ -272,12 +352,27 @@ export default function Home({ address, network, onSend, onReceive }: HomeProps)
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <svg className="w-6 h-6 animate-spin text-text-muted" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            <svg
+              className="w-6 h-6 animate-spin text-text-muted"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
             </svg>
           </div>
-        ) : activeTab === 'tokens' ? (
+        ) : activeTab === "tokens" ? (
           tokens.length > 0 ? (
             <TokenList tokens={tokens} />
           ) : (
