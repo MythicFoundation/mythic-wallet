@@ -1,5 +1,8 @@
 import { Keypair, Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL, SendOptions } from "@solana/web3.js";
 import * as bip39 from "bip39";
+import { wordlists } from "bip39";
+
+const english = wordlists.english ?? wordlists.EN;
 import { derivePath } from "ed25519-hd-key";
 
 export interface WalletAccount {
@@ -59,11 +62,11 @@ export const NETWORKS = {
 export type NetworkId = keyof typeof NETWORKS;
 
 export function generateMnemonic(): string {
-  return bip39.generateMnemonic();
+  return bip39.generateMnemonic(128, undefined, english);
 }
 
 export function validateMnemonic(mnemonic: string): boolean {
-  return bip39.validateMnemonic(mnemonic);
+  return bip39.validateMnemonic(mnemonic, english);
 }
 
 export async function keypairFromMnemonic(mnemonic: string, accountIndex = 0): Promise<WalletAccount> {
