@@ -7,13 +7,6 @@ import nacl from 'tweetnacl';
 const AUTO_LOCK_TIMEOUT = 15 * 60 * 1000;
 let lockTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Pending signing requests waiting for popup approval
-const pendingRequests = new Map<string, {
-  type: 'signTransaction' | 'signMessage' | 'sendTransaction';
-  data: any;
-  sendResponse: (response: any) => void;
-}>();
-
 function resetLockTimer() {
   if (lockTimer) clearTimeout(lockTimer);
   lockTimer = setTimeout(async () => {
@@ -23,7 +16,6 @@ function resetLockTimer() {
       await chrome.storage.local.set({
         mythic_state: { ...state, isLocked: true },
       });
-      // Clear session key on auto-lock
       await chrome.storage.session?.remove('mythic_session_key').catch(() => {});
     }
   }, AUTO_LOCK_TIMEOUT);
@@ -43,15 +35,8 @@ async function getSessionKeypair(): Promise<Keypair | null> {
 }
 
 async function getNetworkRpcUrl(): Promise<string> {
-  try {
-    const result = await chrome.storage.local.get('mythic_state');
-    const state = result.mythic_state;
-    const network = state?.activeNetwork || 'mythic-mainnet';
-    if (network === 'mythic-testnet') return 'http://48.211.216.77:8899';
-    return 'https://rpc.mythic.sh';
-  } catch {
-    return 'https://rpc.mythic.sh';
-  }
+  // All networks use the public RPC endpoint
+  return 'https://testnet.mythic.sh';
 }
 
 async function signTransactionWithKeypair(transactionData: string): Promise<{ signedTransaction?: string; error?: string }> {
@@ -61,7 +46,6 @@ async function signTransactionWithKeypair(transactionData: string): Promise<{ si
   }
 
   try {
-    // Try parsing as a serialized transaction (base64)
     const txBuffer = Buffer.from(transactionData, 'base64');
 
     // Try as versioned transaction first
@@ -82,8 +66,6 @@ async function signTransactionWithKeypair(transactionData: string): Promise<{ si
       // Not a serialized transaction
     }
 
-    // Maybe it's a JSON-encoded transaction message that needs full construction
-    // For raw transaction objects, sign the message directly
     return { error: 'Unsupported transaction format. Please provide a base64-serialized transaction.' };
   } catch (err: any) {
     return { error: err?.message || 'Failed to sign transaction' };
@@ -131,7 +113,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.get('mythic_state', (result) => {
       sendResponse(result.mythic_state || { hasWallet: false, isLocked: true });
     });
-    return true; // async response
+    return true;
   }
 
   if (message.type === 'MYTHIC_CONNECT') {
@@ -171,22 +153,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'MYTHIC_SIGN_TRANSACTION') {
-    // Check wallet state first
     chrome.storage.local.get('mythic_state', async (result) => {
       const state = result.mythic_state;
       if (!state || !state.hasWallet || state.isLocked) {
         sendResponse({ error: 'Wallet is locked. Please unlock first.' });
         return;
       }
-
-      // Check if the requesting origin is connected
       const origin = message.origin;
       if (origin && !state.connectedSites?.includes(origin)) {
         sendResponse({ error: 'Site not connected. Call connect() first.' });
         return;
       }
-
-      // Sign the transaction directly using the session keypair
       const result2 = await signTransactionWithKeypair(message.transaction);
       sendResponse(result2);
     });
@@ -200,13 +177,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ error: 'Wallet is locked. Please unlock first.' });
         return;
       }
-
       const origin = message.origin;
       if (origin && !state.connectedSites?.includes(origin)) {
         sendResponse({ error: 'Site not connected. Call connect() first.' });
         return;
       }
-
       const result2 = await signMessageWithKeypair(message.message);
       sendResponse(result2);
     });
@@ -224,7 +199,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-// Initialize lock timer on install/startup
 chrome.runtime.onInstalled.addListener(() => {
   resetLockTimer();
 });
