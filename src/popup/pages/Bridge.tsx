@@ -277,7 +277,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
           {direction === "deposit" ? "Deposit Submitted" : "Withdrawal Submitted"}
         </h2>
         <p className="text-sm text-text-muted text-center mb-1">
-          {amountNum} SOL from {sourceNetwork} to {destNetwork}
+          {amountNum} MYTH from {sourceNetwork} to {destNetwork}
         </p>
         <p className="text-xs text-text-muted text-center mb-4">
           {direction === "deposit"
@@ -359,13 +359,13 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
             <div className="flex justify-between mb-3">
               <span className="text-xs text-text-muted">Amount</span>
               <span className="font-mono text-sm font-semibold text-text-heading">
-                {amount} SOL
+                {amount} MYTH
               </span>
             </div>
             <div className="flex justify-between mb-3">
               <span className="text-xs text-text-muted">Network Fee</span>
               <span className="font-mono text-xs text-text-body">
-                ~{estimatedFee} SOL
+                ~{estimatedFee} MYTH
               </span>
             </div>
             {direction === "deposit" && (
@@ -550,7 +550,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 6,
               })}{" "}
-              SOL
+              MYTH
             </span>
           )}
         </div>
@@ -574,11 +574,11 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
                 setAmount(e.target.value);
                 setError("");
               }}
-              placeholder={`Min ${minDeposit} SOL`}
+              placeholder={`Min ${minDeposit} MYTH`}
               className="w-full bg-surface-elevated border border-subtle px-3 py-2.5 text-sm font-mono text-text-heading placeholder:text-text-disabled focus:outline-none focus:border-rose pr-14"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted font-display">
-              SOL
+              MYTH
             </span>
           </div>
         </div>
@@ -588,7 +588,7 @@ export default function Bridge({ address, network, onBack }: BridgeProps) {
           <div className="bg-surface-elevated border border-subtle px-3 py-2 flex justify-between">
             <span className="text-xs text-text-muted">Estimated Fee</span>
             <span className="font-mono text-xs text-text-body">
-              ~{estimatedFee} SOL
+              ~{estimatedFee} MYTH
             </span>
           </div>
           <div className="bg-surface-elevated border border-subtle px-3 py-2 flex justify-between">

@@ -35,8 +35,15 @@ async function getSessionKeypair(): Promise<Keypair | null> {
 }
 
 async function getNetworkRpcUrl(): Promise<string> {
-  // All networks use the public RPC endpoint
-  return 'https://testnet.mythic.sh';
+  try {
+    const result = await chrome.storage.local.get('mythic_state');
+    const state = result.mythic_state;
+    const network = state?.network || 'mythic-mainnet';
+    if (network === 'mythic-testnet') return 'https://testnet.mythic.sh';
+    return 'https://rpc.mythic.sh';
+  } catch {
+    return 'https://rpc.mythic.sh';
+  }
 }
 
 async function signTransactionWithKeypair(transactionData: string): Promise<{ signedTransaction?: string; error?: string }> {

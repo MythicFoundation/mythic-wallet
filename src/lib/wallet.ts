@@ -46,7 +46,7 @@ export const KNOWN_MINTS: Record<string, { symbol: string; name: string; decimal
 export const NETWORKS = {
   "mythic-mainnet": {
     name: "Mythic Mainnet",
-    rpcUrl: "https://testnet.mythic.sh",
+    rpcUrl: "https://rpc.mythic.sh",
     explorerUrl: "https://explorer.mythic.sh",
   },
   "mythic-testnet": {
