@@ -173,10 +173,5 @@ If you discover a security vulnerability in Mythic Wallet, please report it resp
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
----
-
-<p align="center">
-  Built by <a href="https://mythiclabs.io">MythicLabs</a> &nbsp;|&nbsp; Part of the <a href="https://mythic.sh">Mythic L2</a> ecosystem
-</p>
+This project is licensed under the [Business Source License 1.1](./LICENSE). The Licensed Work will convert to MIT License on February 25, 2028.
