@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MythicFoundation/mythic-wallet/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-39FF14?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/MythicFoundation/mythic-wallet/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-BUSL_1.1-blue?style=flat-square" alt="License" /></a>
   <a href="https://github.com/MythicFoundation/mythic-wallet/actions"><img src="https://img.shields.io/badge/Build-Passing-39FF14?style=flat-square" alt="Build" /></a>
   <a href="#"><img src="https://img.shields.io/badge/Version-1.2.0-7B2FFF?style=flat-square" alt="Version" /></a>
   <a href="#"><img src="https://img.shields.io/badge/Manifest-V3-39FF14?style=flat-square" alt="Manifest V3" /></a>
