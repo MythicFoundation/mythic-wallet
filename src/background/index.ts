@@ -3,8 +3,8 @@
 import { Keypair, Connection, Transaction, VersionedTransaction } from "@solana/web3.js";
 import nacl from "tweetnacl";
 
-// Auto-lock wallet after 15 minutes of inactivity
-const AUTO_LOCK_TIMEOUT = 15 * 60 * 1000;
+// Auto-lock wallet after 5 minutes of inactivity
+const AUTO_LOCK_TIMEOUT = 5 * 60 * 1000;
 let lockTimer: ReturnType<typeof setTimeout> | null = null;
 
 function resetLockTimer() {
@@ -129,6 +129,39 @@ async function sendSignedTransaction(
   }
 }
 
+// Wait for popup to approve/reject a pending connect request
+function waitForConnectDecision(origin: string): Promise<{ publicKey?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    const pollInterval = setInterval(async () => {
+      try {
+        const pending = await chrome.storage.session.get("mythic_pending_connect");
+        if (!pending.mythic_pending_connect) {
+          // Request was handled (approved or rejected)
+          clearInterval(pollInterval);
+          const updatedState = await chrome.storage.local.get("mythic_state");
+          const currentState = updatedState.mythic_state;
+          if (currentState?.connectedSites?.includes(origin)) {
+            const wallet = await chrome.storage.local.get("mythic_wallet");
+            resolve({ publicKey: wallet.mythic_wallet?.publicKey });
+          } else {
+            resolve({ error: "Connection rejected by user" });
+          }
+          return;
+        }
+        if (Date.now() - startTime > 30000) {
+          clearInterval(pollInterval);
+          await chrome.storage.session.remove("mythic_pending_connect").catch(() => {});
+          resolve({ error: "Connection request timed out" });
+        }
+      } catch {
+        clearInterval(pollInterval);
+        resolve({ error: "Connection error" });
+      }
+    }, 500);
+  });
+}
+
 // Listen for messages from popup or content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   resetLockTimer();
@@ -142,26 +175,84 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === "MYTHIC_CONNECT") {
-    chrome.storage.local.get("mythic_state", async (result) => {
-      const state = result.mythic_state;
-      if (!state || !state.hasWallet || state.isLocked) {
-        sendResponse({ error: "Wallet is locked or not set up" });
-        return;
-      }
-      const origin = message.origin || sender.origin;
-      if (origin && !state.connectedSites?.includes(origin)) {
-        const updated = {
-          ...state,
-          connectedSites: [...(state.connectedSites || []), origin],
-        };
-        await chrome.storage.local.set({ mythic_state: updated });
-      }
-      const wallet = await chrome.storage.local.get("mythic_wallet");
-      sendResponse({
-        publicKey: wallet.mythic_wallet?.publicKey,
-      });
+  if (message.type === "MYTHIC_GET_PENDING_CONNECT") {
+    chrome.storage.session.get("mythic_pending_connect", (result) => {
+      sendResponse(result.mythic_pending_connect || null);
     });
+    return true;
+  }
+
+  if (message.type === "MYTHIC_APPROVE_CONNECT") {
+    (async () => {
+      try {
+        const result = await chrome.storage.local.get("mythic_state");
+        const state = result.mythic_state;
+        if (!state) { sendResponse({ error: "No state" }); return; }
+        const origin = message.origin;
+        if (origin && !state.connectedSites?.includes(origin)) {
+          const updated = {
+            ...state,
+            connectedSites: [...(state.connectedSites || []), origin],
+          };
+          await chrome.storage.local.set({ mythic_state: updated });
+        }
+        // Clear the pending request — this unblocks the polling in MYTHIC_CONNECT
+        await chrome.storage.session?.remove("mythic_pending_connect").catch(() => {});
+        const wallet = await chrome.storage.local.get("mythic_wallet");
+        sendResponse({ publicKey: wallet.mythic_wallet?.publicKey });
+      } catch {
+        sendResponse({ error: "Failed to approve connection" });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "MYTHIC_REJECT_CONNECT") {
+    (async () => {
+      // Clear without adding to connectedSites — polling will see rejection
+      await chrome.storage.session?.remove("mythic_pending_connect").catch(() => {});
+      sendResponse({ rejected: true });
+    })();
+    return true;
+  }
+
+  if (message.type === "MYTHIC_CONNECT") {
+    (async () => {
+      try {
+        const result = await chrome.storage.local.get("mythic_state");
+        const state = result.mythic_state;
+        if (!state || !state.hasWallet || state.isLocked) {
+          sendResponse({ error: "Wallet is locked or not set up" });
+          return;
+        }
+        const origin = message.origin || sender.origin;
+
+        // If site is already connected, auto-approve
+        if (origin && state.connectedSites?.includes(origin)) {
+          const wallet = await chrome.storage.local.get("mythic_wallet");
+          sendResponse({ publicKey: wallet.mythic_wallet?.publicKey });
+          return;
+        }
+
+        // Store pending connect request and open popup for approval
+        await chrome.storage.session.set({
+          mythic_pending_connect: { origin, timestamp: Date.now() },
+        });
+
+        // Try to open the popup to prompt user for approval
+        try {
+          await chrome.action.openPopup();
+        } catch {
+          // openPopup may not be supported in all contexts
+        }
+
+        // Wait for the user to approve or reject via the popup
+        const decision = await waitForConnectDecision(origin);
+        sendResponse(decision);
+      } catch {
+        sendResponse({ error: "Connection error" });
+      }
+    })();
     return true;
   }
 

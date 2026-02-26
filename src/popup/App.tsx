@@ -7,6 +7,7 @@ import Settings from "./pages/Settings";
 import Bridge from "./pages/Bridge";
 import Onboarding from "./pages/Onboarding";
 import Lock from "./pages/Lock";
+import ConnectApproval from "./pages/ConnectApproval";
 import type { NetworkId } from "../lib/wallet";
 import { keypairFromMnemonic } from "../lib/wallet";
 
@@ -19,6 +20,7 @@ export default function App() {
   const [address, setAddress] = useState("");
   const [network, setNetwork] = useState<NetworkId>("mythic-mainnet");
   const [connectedSites, setConnectedSites] = useState<string[]>([]);
+  const [pendingConnect, setPendingConnect] = useState<{ origin: string; timestamp: number } | null>(null);
 
   useEffect(() => {
     // Check stored state from chrome.storage
@@ -39,7 +41,39 @@ export default function App() {
         setAddress(wallet.publicKey);
       }
     });
+
+    // Check for pending dApp connect requests
+    chrome.runtime.sendMessage(
+      { type: "MYTHIC_GET_PENDING_CONNECT" },
+      (response) => {
+        if (response && response.origin) {
+          setPendingConnect(response);
+        }
+      }
+    );
   }, []);
+
+  // Handle dApp approval
+  const handleApproveConnect = () => {
+    if (!pendingConnect) return;
+    chrome.runtime.sendMessage(
+      { type: "MYTHIC_APPROVE_CONNECT", origin: pendingConnect.origin },
+      () => {
+        setConnectedSites((prev) =>
+          prev.includes(pendingConnect.origin)
+            ? prev
+            : [...prev, pendingConnect.origin]
+        );
+        setPendingConnect(null);
+      }
+    );
+  };
+
+  const handleRejectConnect = () => {
+    chrome.runtime.sendMessage({ type: "MYTHIC_REJECT_CONNECT" }, () => {
+      setPendingConnect(null);
+    });
+  };
 
   // Loading state
   if (hasWallet === null) {
@@ -109,6 +143,19 @@ export default function App() {
               return false;
             }
           }}
+        />
+      </div>
+    );
+  }
+
+  // dApp connection approval prompt — shown before wallet UI
+  if (pendingConnect) {
+    return (
+      <div className="h-full bg-surface-base">
+        <ConnectApproval
+          origin={pendingConnect.origin}
+          onApprove={handleApproveConnect}
+          onReject={handleRejectConnect}
         />
       </div>
     );
