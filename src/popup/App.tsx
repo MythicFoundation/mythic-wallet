@@ -4,7 +4,6 @@ import Header from './components/Header';
 import Home from './pages/Home';
 import Send from './pages/Send';
 import Receive from './pages/Receive';
-import Bridge from './pages/Bridge';
 import Settings from './pages/Settings';
 import Onboarding from './pages/Onboarding';
 import Lock from './pages/Lock';
@@ -194,12 +193,28 @@ export default function App() {
         return <Receive address={address} network={network} onBack={() => setPage('home')} />;
       case 'bridge':
         return (
-          <Bridge
-            address={address}
-            network={network}
-            onBack={() => setPage('home')}
-            onDone={() => { setPage('home'); fetchData(); }}
-          />
+          <div className="flex flex-col h-full">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-subtle">
+              <button onClick={() => setPage('home')} className="p-1 hover:bg-surface-hover">
+                <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <h2 className="font-display text-base font-bold">Bridge</h2>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center px-6">
+              <svg className="w-16 h-16 text-rose mb-4 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+              </svg>
+              <h2 className="font-display text-xl font-bold text-text-heading mb-2">Coming Soon</h2>
+              <p className="text-sm text-text-muted text-center">
+                Bridge between Solana L1 and Mythic L2 directly from your wallet.
+              </p>
+              <p className="text-xs text-text-disabled text-center mt-2">
+                Use <span className="text-rose">mythic.sh/bridge</span> in the meantime.
+              </p>
+            </div>
+          </div>
         );
       case 'settings':
         return (
