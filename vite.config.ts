@@ -38,12 +38,37 @@ function chromeExtensionPlugin(): Plugin {
   };
 }
 
+// Inject process and Buffer polyfills into every entry
+function nodePolyfillPlugin(): Plugin {
+  return {
+    name: 'node-polyfills',
+    transform(code, id) {
+      // Skip node_modules internals and non-JS files
+      if (id.includes('node_modules/process/') || id.includes('node_modules/buffer/')) return;
+      if (!/\.(ts|tsx|js|jsx|mjs)$/.test(id)) return;
+      return null; // Let the define handle it
+    },
+    transformIndexHtml(html) {
+      // Inject polyfill script before other scripts in popup.html
+      const polyfillScript = `<script>
+  window.global = window;
+  window.process = window.process || { env: {}, version: '', browser: true };
+  window.Buffer = window.Buffer || null;
+</script>`;
+      return html.replace('<head>', `<head>\n${polyfillScript}`);
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [react(), chromeExtensionPlugin()],
+  plugins: [react(), nodePolyfillPlugin(), chromeExtensionPlugin()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'public/popup.html'),
@@ -64,10 +89,22 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      // Ensure buffer resolves to the npm package
+      buffer: 'buffer',
     },
   },
   define: {
-    'process.env': {},
+    'process.env': '{}',
+    'process.browser': 'true',
+    'process.version': '""',
     global: 'globalThis',
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+    },
+    include: ['buffer', 'process'],
   },
 });

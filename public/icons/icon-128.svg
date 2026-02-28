@@ -1,5 +1,5 @@
 <svg viewBox="0 0 128 128" width="128" height="128" xmlns="http://www.w3.org/2000/svg">
-  <polygon points="64,10.2 25.6,56.3 64,71.7" fill="#FF2D78" opacity="0.92"/>
-  <polygon points="64,10.2 102.4,56.3 64,71.7" fill="#FF5C96" opacity="0.78"/>
-  <polygon points="25.6,56.3 64,71.7 102.4,56.3 64,117.8" fill="#CC2460" opacity="0.88"/>
+  <rect width="128" height="128" rx="26" fill="#FF2D78"/>
+  <path d="M64 28L38 66l26 11 26-11L64 28z" fill="white" fill-opacity="0.95"/>
+  <path d="M38 66l26 11 26-11L64 100 38 66z" fill="white" fill-opacity="0.65"/>
 </svg>

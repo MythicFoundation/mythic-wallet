@@ -1,104 +1,115 @@
-import React, { useState, useEffect } from "react";
-import Header from "./components/Header";
-import Home from "./pages/Home";
-import Send from "./pages/Send";
-import Receive from "./pages/Receive";
-import Settings from "./pages/Settings";
-import Bridge from "./pages/Bridge";
-import Onboarding from "./pages/Onboarding";
-import Lock from "./pages/Lock";
-import ConnectApproval from "./pages/ConnectApproval";
-import type { NetworkId } from "../lib/wallet";
-import { keypairFromMnemonic } from "../lib/wallet";
+import '../polyfills';
+import React, { useState, useEffect, useCallback } from 'react';
+import Header from './components/Header';
+import Home from './pages/Home';
+import Send from './pages/Send';
+import Receive from './pages/Receive';
+import Bridge from './pages/Bridge';
+import Settings from './pages/Settings';
+import Onboarding from './pages/Onboarding';
+import Lock from './pages/Lock';
+import UpdateBanner from './components/UpdateBanner';
+import type { NetworkId, TokenBalance, TransactionRecord } from '../lib/wallet';
+import { getConnection, getTokenBalances, getTransactionHistory, getSolPrice, getMythPrice } from '../lib/wallet';
 
-type Page = "home" | "send" | "receive" | "settings" | "bridge";
+type Page = 'home' | 'send' | 'receive' | 'bridge' | 'settings';
+
+const DEMO_MODE = typeof chrome === 'undefined' || !chrome.storage;
 
 export default function App() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>('home');
   const [hasWallet, setHasWallet] = useState<boolean | null>(null);
   const [isLocked, setIsLocked] = useState(false);
-  const [address, setAddress] = useState("");
-  const [network, setNetwork] = useState<NetworkId>("mythic-mainnet");
+  const [address, setAddress] = useState('');
+  const [network, setNetwork] = useState<NetworkId>('mythic-mainnet');
   const [connectedSites, setConnectedSites] = useState<string[]>([]);
-  const [pendingConnect, setPendingConnect] = useState<{ origin: string; timestamp: number } | null>(null);
+
+  // Real data state
+  const [tokens, setTokens] = useState<TokenBalance[]>([]);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [solPrice, setSolPrice] = useState(0);
+  const [mythPrice, setMythPrice] = useState(0);
 
   useEffect(() => {
-    // Check stored state from chrome.storage
-    chrome.storage.local.get("mythic_state", (result) => {
+    if (DEMO_MODE) {
+      setHasWallet(false);
+      return;
+    }
+    chrome.storage.local.get('mythic_state', (result) => {
       const state = result.mythic_state;
       if (state && state.hasWallet) {
         setHasWallet(true);
         setIsLocked(state.isLocked);
-        setNetwork(state.activeNetwork || "mythic-mainnet");
+        setNetwork(state.activeNetwork || 'mythic-mainnet');
         setConnectedSites(state.connectedSites || []);
       } else {
         setHasWallet(false);
       }
     });
-    chrome.storage.local.get("mythic_wallet", (result) => {
+    chrome.storage.local.get('mythic_wallet', (result) => {
       const wallet = result.mythic_wallet;
-      if (wallet) {
-        setAddress(wallet.publicKey);
-      }
+      if (wallet) setAddress(wallet.publicKey);
     });
-
-    // Check for pending dApp connect requests
-    chrome.runtime.sendMessage(
-      { type: "MYTHIC_GET_PENDING_CONNECT" },
-      (response) => {
-        if (response && response.origin) {
-          setPendingConnect(response);
-        }
-      }
-    );
   }, []);
 
-  // Handle dApp approval
-  const handleApproveConnect = () => {
-    if (!pendingConnect) return;
-    chrome.runtime.sendMessage(
-      { type: "MYTHIC_APPROVE_CONNECT", origin: pendingConnect.origin },
-      () => {
-        setConnectedSites((prev) =>
-          prev.includes(pendingConnect.origin)
-            ? prev
-            : [...prev, pendingConnect.origin]
-        );
-        setPendingConnect(null);
-      }
-    );
-  };
+  // Fetch real balances & transactions when address or network changes
+  const isL2 = network.startsWith('mythic');
 
-  const handleRejectConnect = () => {
-    chrome.runtime.sendMessage({ type: "MYTHIC_REJECT_CONNECT" }, () => {
-      setPendingConnect(null);
-    });
-  };
+  const fetchData = useCallback(async () => {
+    if (!address || isLocked) return;
+    setLoading(true);
+    try {
+      const conn = getConnection(network);
+      const [tokenList, txList, solUsd, mythUsd] = await Promise.all([
+        getTokenBalances(conn, address, network),
+        getTransactionHistory(conn, address, 20),
+        getSolPrice(),
+        isL2 ? getMythPrice() : Promise.resolve({ priceUsd: 0, priceSOL: 0 }),
+      ]);
+      setSolPrice(solUsd);
+      setMythPrice(mythUsd.priceUsd);
 
-  // Loading state
+      // Enrich tokens with USD values
+      const enriched = tokenList.map((t) => {
+        if (t.usdValue > 0) return t; // Already priced (e.g. Helius DAS)
+        // MYTH native on L2 or MYTH SPL token
+        if (t.symbol === 'MYTH') {
+          return { ...t, usdValue: t.balance * mythUsd.priceUsd };
+        }
+        if (t.symbol === 'SOL' || t.symbol === 'wSOL' || t.symbol === 'mSOL') {
+          return { ...t, usdValue: t.balance * solUsd };
+        }
+        if (t.symbol === 'USDC' || t.symbol === 'USDT') {
+          return { ...t, usdValue: t.balance };
+        }
+        // L2 wBTC/wETH — no price feed yet, skip
+        return t;
+      });
+
+      setTokens(enriched);
+      setTransactions(txList);
+    } catch (e) {
+      console.error('Fetch failed:', e);
+    }
+    setLoading(false);
+  }, [address, network, isLocked, isL2]);
+
+  useEffect(() => {
+    fetchData();
+    // Auto-refresh every 30s
+    const interval = setInterval(fetchData, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // Loading
   if (hasWallet === null) {
     return (
       <div className="flex items-center justify-center h-full bg-surface-base">
-        <svg
-          viewBox="0 0 100 100"
-          className="w-12 h-12 animate-pulse"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <polygon
-            points="50,8 20,44 50,56"
-            fill="#FF2D78"
-            opacity="0.92"
-          />
-          <polygon
-            points="50,8 80,44 50,56"
-            fill="#FF5C96"
-            opacity="0.78"
-          />
-          <polygon
-            points="20,44 50,56 80,44 50,92"
-            fill="#CC2460"
-            opacity="0.88"
-          />
+        <svg viewBox="0 0 100 100" className="w-12 h-12 animate-pulse" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,8 20,44 50,56" fill="#FF2D78" opacity="0.92"/>
+          <polygon points="50,8 80,44 50,56" fill="#FF5C96" opacity="0.78"/>
+          <polygon points="20,44 50,56 80,44 50,92" fill="#CC2460" opacity="0.88"/>
         </svg>
       </div>
     );
@@ -119,126 +130,83 @@ export default function App() {
     );
   }
 
-  // Lock screen
+  // Lock
   if (isLocked) {
     return (
       <div className="h-full bg-surface-base">
         <Lock
           onUnlock={async (password) => {
+            if (DEMO_MODE) { setIsLocked(false); return true; }
             try {
-              const { unlockWallet } = await import("../lib/storage");
-              const mnemonic = await unlockWallet(password);
-              if (mnemonic) {
-                try {
-                  const account = await keypairFromMnemonic(mnemonic);
-                  await chrome.storage.session.set({
-                    mythic_session_key: Array.from(account.secretKey),
-                  });
-                } catch {}
-                setIsLocked(false);
-                return true;
-              }
+              const { unlockWallet } = await import('../lib/storage');
+              const secret = await unlockWallet(password);
+              if (secret) { setIsLocked(false); return true; }
               return false;
-            } catch {
-              return false;
-            }
+            } catch { return false; }
           }}
         />
       </div>
     );
   }
 
-  // dApp connection approval prompt — shown before wallet UI
-  if (pendingConnect) {
-    return (
-      <div className="h-full bg-surface-base">
-        <ConnectApproval
-          origin={pendingConnect.origin}
-          onApprove={handleApproveConnect}
-          onReject={handleRejectConnect}
-        />
-      </div>
-    );
-  }
-
-  // Waiting for address to load from storage
-  if (!address) {
-    return (
-      <div className="flex items-center justify-center h-full bg-surface-base">
-        <svg
-          viewBox="0 0 100 100"
-          className="w-12 h-12 animate-pulse"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <polygon points="50,8 20,44 50,56" fill="#FF2D78" opacity="0.92" />
-          <polygon points="50,8 80,44 50,56" fill="#FF5C96" opacity="0.78" />
-          <polygon points="20,44 50,56 80,44 50,92" fill="#CC2460" opacity="0.88" />
-        </svg>
-      </div>
-    );
-  }
-
   const handleLock = () => {
     setIsLocked(true);
-    setPage("home");
-    chrome.storage.session?.remove("mythic_session_key").catch(() => {});
-    chrome.storage.local.get("mythic_state", (result) => {
-      const state = result.mythic_state || {};
-      chrome.storage.local.set({
-        mythic_state: { ...state, isLocked: true },
+    setPage('home');
+    if (!DEMO_MODE) {
+      chrome.storage.local.get('mythic_state', (result) => {
+        const state = result.mythic_state || {};
+        chrome.storage.local.set({ mythic_state: { ...state, isLocked: true } });
       });
-    });
+    }
   };
 
   const handleNetworkChange = (newNetwork: NetworkId) => {
     setNetwork(newNetwork);
-    chrome.storage.local.get("mythic_state", (result) => {
-      const state = result.mythic_state || {};
-      chrome.storage.local.set({
-        mythic_state: { ...state, activeNetwork: newNetwork },
+    setTokens([]);
+    setTransactions([]);
+    if (!DEMO_MODE) {
+      chrome.storage.local.get('mythic_state', (result) => {
+        const state = result.mythic_state || {};
+        chrome.storage.local.set({ mythic_state: { ...state, activeNetwork: newNetwork } });
       });
-    });
+    }
   };
 
   const handleDisconnectSite = (site: string) => {
-    const updated = connectedSites.filter((s) => s !== site);
-    setConnectedSites(updated);
-    chrome.storage.local.get("mythic_state", (result) => {
-      const state = result.mythic_state || {};
-      chrome.storage.local.set({
-        mythic_state: { ...state, connectedSites: updated },
-      });
-    });
+    setConnectedSites((prev) => prev.filter((s) => s !== site));
   };
 
   const renderPage = () => {
     switch (page) {
-      case "send":
+      case 'send':
         return (
           <Send
             address={address}
             network={network}
-            onBack={() => setPage("home")}
+            tokens={tokens}
+            solPrice={solPrice}
+            mythPrice={mythPrice}
+            onBack={() => setPage('home')}
+            onSent={() => { setPage('home'); fetchData(); }}
           />
         );
-      case "receive":
-        return (
-          <Receive address={address} onBack={() => setPage("home")} />
-        );
-      case "bridge":
+      case 'receive':
+        return <Receive address={address} network={network} onBack={() => setPage('home')} />;
+      case 'bridge':
         return (
           <Bridge
             address={address}
             network={network}
-            onBack={() => setPage("home")}
+            onBack={() => setPage('home')}
+            onDone={() => { setPage('home'); fetchData(); }}
           />
         );
-      case "settings":
+      case 'settings':
         return (
           <Settings
             network={network}
             connectedSites={connectedSites}
-            onBack={() => setPage("home")}
+            onBack={() => setPage('home')}
             onNetworkChange={handleNetworkChange}
             onLock={handleLock}
             onDisconnectSite={handleDisconnectSite}
@@ -247,11 +215,16 @@ export default function App() {
       default:
         return (
           <Home
-            address={address}
+            tokens={tokens}
+            transactions={transactions}
+            loading={loading}
+            solPrice={solPrice}
+            mythPrice={mythPrice}
             network={network}
-            onSend={() => setPage("send")}
-            onReceive={() => setPage("receive")}
-            onBridge={() => setPage("bridge")}
+            onSend={() => setPage('send')}
+            onReceive={() => setPage('receive')}
+            onBridge={() => setPage('bridge')}
+            onRefresh={fetchData}
           />
         );
     }
@@ -259,15 +232,20 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-full bg-surface-base">
-      {page === "home" && (
-        <Header
-          address={address}
-          network={network}
-          onSettingsClick={() => setPage("settings")}
-          onCopyAddress={() => {}}
-        />
+      {page === 'home' && (
+        <>
+          <Header
+            address={address}
+            network={network}
+            onSettingsClick={() => setPage('settings')}
+            onCopyAddress={() => {}}
+          />
+          <UpdateBanner />
+        </>
       )}
-      <div className="flex-1 overflow-hidden">{renderPage()}</div>
+      <div className="flex-1 overflow-hidden">
+        {renderPage()}
+      </div>
     </div>
   );
 }

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import Button from '../components/Button';
-import { truncateAddress, NATIVE_TOKEN_SYMBOL } from '../../lib/wallet';
+import { truncateAddress, NETWORKS, type NetworkId } from '../../lib/wallet';
 
 interface ReceiveProps {
   address: string;
+  network: NetworkId;
   onBack: () => void;
 }
 
-export default function Receive({ address, onBack }: ReceiveProps) {
+export default function Receive({ address, network, onBack }: ReceiveProps) {
+  const net = NETWORKS[network];
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -69,7 +71,7 @@ export default function Receive({ address, onBack }: ReceiveProps) {
         </Button>
 
         <p className="text-[10px] text-text-muted mt-4 text-center">
-          Only send {NATIVE_TOKEN_SYMBOL} or SPL tokens on the Mythic network to this address
+          Only send tokens on <span className="text-text-body font-semibold">{net.name}</span> to this address
         </p>
       </div>
     </div>

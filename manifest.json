@@ -1,33 +1,28 @@
 {
   "manifest_version": 3,
   "name": "Mythic Wallet",
-  "version": "1.4.0",
-  "description": "The official wallet for Mythic L2 \u2014 Send, receive, and manage MYTH tokens on the Mythic network.",
+  "version": "1.0.0",
+  "description": "The wallet for Mythic L2 — Send, receive, and manage SOL and MYTH tokens on the Mythic network.",
+  "update_url": "https://wallet.mythic.sh/api/extension/updates.xml",
   "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "https://rpc.mythic.sh/*",
-    "https://testnet.mythic.sh/*",
-    "https://api.mainnet-beta.solana.com/*",
-    "https://explorer.mythic.sh/*",
-    "https://fonts.googleapis.com/*",
-    "https://fonts.gstatic.com/*"
+    "storage",
+    "activeTab",
+    "alarms"
   ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon-16.svg",
-      "32": "icons/icon-32.svg",
-      "48": "icons/icon-48.svg",
-      "128": "icons/icon-128.svg"
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
     }
   },
   "icons": {
-    "16": "icons/icon-16.svg",
-    "32": "icons/icon-32.svg",
-    "48": "icons/icon-48.svg",
-    "128": "icons/icon-128.svg"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "background": {
     "service_worker": "background.js",
@@ -35,16 +30,15 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "content.js"
-      ],
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
       "run_at": "document_start"
     }
   ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
-  }
+  "web_accessible_resources": [
+    {
+      "resources": ["inpage.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

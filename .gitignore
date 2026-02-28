@@ -1,11 +1,6 @@
 node_modules/
 dist/
-.env
-.env.*
-!.env.example
-keys/
+*.zip
+.DS_Store
+*.crx
 *.pem
-*.key
-*.jsonl
-*.log
-mythic-wallet-v*.zip

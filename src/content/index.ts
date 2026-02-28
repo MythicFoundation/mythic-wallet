@@ -32,12 +32,6 @@ function injectProvider() {
               }
             };
             window.addEventListener('message', handler);
-
-            // Timeout after 60 seconds (user may need time to approve in popup)
-            setTimeout(function() {
-              window.removeEventListener('message', handler);
-              reject(new Error('Connection request timed out'));
-            }, 60000);
           });
         }
 
@@ -50,16 +44,13 @@ function injectProvider() {
 
         async signTransaction(transaction) {
           return new Promise((resolve, reject) => {
-            // Generate a unique request ID for this signing request
-            var requestId = 'sign_tx_' + Date.now() + '_' + Math.random().toString(36).slice(2);
             window.postMessage({
               type: 'MYTHIC_SIGN_TRANSACTION_REQUEST',
-              requestId: requestId,
-              transaction: typeof transaction === 'string' ? transaction : JSON.stringify(transaction),
+              transaction: JSON.stringify(transaction),
             }, '*');
 
-            var handler = function(event) {
-              if (event.data.type === 'MYTHIC_SIGN_TRANSACTION_RESPONSE' && event.data.requestId === requestId) {
+            const handler = (event) => {
+              if (event.data.type === 'MYTHIC_SIGN_TRANSACTION_RESPONSE') {
                 window.removeEventListener('message', handler);
                 if (event.data.error) {
                   reject(new Error(event.data.error));
@@ -69,34 +60,18 @@ function injectProvider() {
               }
             };
             window.addEventListener('message', handler);
-
-            // Timeout after 120 seconds for user approval
-            setTimeout(function() {
-              window.removeEventListener('message', handler);
-              reject(new Error('Transaction signing timed out'));
-            }, 120000);
           });
-        }
-
-        async signAllTransactions(transactions) {
-          var signed = [];
-          for (var i = 0; i < transactions.length; i++) {
-            signed.push(await this.signTransaction(transactions[i]));
-          }
-          return signed;
         }
 
         async signMessage(message) {
           return new Promise((resolve, reject) => {
-            var requestId = 'sign_msg_' + Date.now() + '_' + Math.random().toString(36).slice(2);
             window.postMessage({
               type: 'MYTHIC_SIGN_MESSAGE_REQUEST',
-              requestId: requestId,
               message: typeof message === 'string' ? message : Array.from(message),
             }, '*');
 
-            var handler = function(event) {
-              if (event.data.type === 'MYTHIC_SIGN_MESSAGE_RESPONSE' && event.data.requestId === requestId) {
+            const handler = (event) => {
+              if (event.data.type === 'MYTHIC_SIGN_MESSAGE_RESPONSE') {
                 window.removeEventListener('message', handler);
                 if (event.data.error) {
                   reject(new Error(event.data.error));
@@ -106,42 +81,6 @@ function injectProvider() {
               }
             };
             window.addEventListener('message', handler);
-
-            // Timeout after 120 seconds
-            setTimeout(function() {
-              window.removeEventListener('message', handler);
-              reject(new Error('Message signing timed out'));
-            }, 120000);
-          });
-        }
-
-        async signAndSendTransaction(transaction, options) {
-          var signed = await this.signTransaction(transaction);
-          return new Promise((resolve, reject) => {
-            var requestId = 'send_tx_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-            window.postMessage({
-              type: 'MYTHIC_SEND_TRANSACTION_REQUEST',
-              requestId: requestId,
-              signedTransaction: signed,
-              options: options || {},
-            }, '*');
-
-            var handler = function(event) {
-              if (event.data.type === 'MYTHIC_SEND_TRANSACTION_RESPONSE' && event.data.requestId === requestId) {
-                window.removeEventListener('message', handler);
-                if (event.data.error) {
-                  reject(new Error(event.data.error));
-                } else {
-                  resolve(event.data.signature);
-                }
-              }
-            };
-            window.addEventListener('message', handler);
-
-            setTimeout(function() {
-              window.removeEventListener('message', handler);
-              reject(new Error('Send transaction timed out'));
-            }, 120000);
           });
         }
 
@@ -199,58 +138,18 @@ window.addEventListener('message', (event) => {
   }
 
   if (event.data.type === 'MYTHIC_SIGN_TRANSACTION_REQUEST') {
-    chrome.runtime.sendMessage(
-      {
-        type: 'MYTHIC_SIGN_TRANSACTION',
-        requestId: event.data.requestId,
-        transaction: event.data.transaction,
-        origin: window.location.origin,
-      },
-      (response) => {
-        window.postMessage({
-          type: 'MYTHIC_SIGN_TRANSACTION_RESPONSE',
-          requestId: event.data.requestId,
-          ...response,
-        }, '*');
-      },
-    );
+    // In production, this would open a popup for transaction approval
+    window.postMessage({
+      type: 'MYTHIC_SIGN_TRANSACTION_RESPONSE',
+      error: 'Transaction signing not yet implemented in this version',
+    }, '*');
   }
 
   if (event.data.type === 'MYTHIC_SIGN_MESSAGE_REQUEST') {
-    chrome.runtime.sendMessage(
-      {
-        type: 'MYTHIC_SIGN_MESSAGE',
-        requestId: event.data.requestId,
-        message: event.data.message,
-        origin: window.location.origin,
-      },
-      (response) => {
-        window.postMessage({
-          type: 'MYTHIC_SIGN_MESSAGE_RESPONSE',
-          requestId: event.data.requestId,
-          ...response,
-        }, '*');
-      },
-    );
-  }
-
-  if (event.data.type === 'MYTHIC_SEND_TRANSACTION_REQUEST') {
-    chrome.runtime.sendMessage(
-      {
-        type: 'MYTHIC_SEND_TRANSACTION',
-        requestId: event.data.requestId,
-        signedTransaction: event.data.signedTransaction,
-        options: event.data.options,
-        origin: window.location.origin,
-      },
-      (response) => {
-        window.postMessage({
-          type: 'MYTHIC_SEND_TRANSACTION_RESPONSE',
-          requestId: event.data.requestId,
-          ...response,
-        }, '*');
-      },
-    );
+    window.postMessage({
+      type: 'MYTHIC_SIGN_MESSAGE_RESPONSE',
+      error: 'Message signing not yet implemented in this version',
+    }, '*');
   }
 });
 
