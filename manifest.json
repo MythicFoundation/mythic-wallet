@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Mythic Wallet",
-  "version": "1.0.0",
-  "description": "The wallet for Mythic L2 — Send, receive, and manage SOL and MYTH tokens on the Mythic network.",
+  "version": "2.0.0",
+  "description": "The official wallet for Mythic L2 — Send, receive, bridge, and manage SOL and MYTH across Solana and Mythic networks.",
   "update_url": "https://wallet.mythic.sh/api/extension/updates.xml",
   "permissions": [
     "storage",
