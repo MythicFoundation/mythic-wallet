@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Button from '../components/Button';
 import {
   generateMnemonic,
@@ -29,7 +29,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [mnemonic, setMnemonic] = useState('');
-  const [confirmWords, setConfirmWords] = useState<string[]>([]);
   const [importPhrase, setImportPhrase] = useState('');
   const [importPrivateKey, setImportPrivateKey] = useState('');
   const [importMethod, setImportMethod] = useState<'phrase' | 'privatekey'>('phrase');
@@ -37,12 +36,29 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [loading, setLoading] = useState(false);
   const [confirmIndices, setConfirmIndices] = useState<number[]>([]);
 
+  // Word-picker state
+  const [selectedWords, setSelectedWords] = useState<(string | null)[]>([null, null, null]);
+  const [currentConfirmIdx, setCurrentConfirmIdx] = useState(0);
+
   // .myth domain state
   const [publicKey, setPublicKey] = useState('');
   const [mythUsername, setMythUsername] = useState('');
   const [domainLoading, setDomainLoading] = useState(false);
   const [domainError, setDomainError] = useState('');
   const [domainSuccess, setDomainSuccess] = useState('');
+
+  // Generate shuffled word options for each confirmation slot
+  const wordOptions = useMemo(() => {
+    if (!mnemonic || confirmIndices.length === 0) return [];
+    const words = mnemonic.split(' ');
+    return confirmIndices.map((idx) => {
+      const correct = words[idx];
+      const others = words.filter((_, i) => i !== idx);
+      const shuffledOthers = others.sort(() => Math.random() - 0.5).slice(0, 5);
+      const options = [correct, ...shuffledOthers].sort(() => Math.random() - 0.5);
+      return options;
+    });
+  }, [mnemonic, confirmIndices]);
 
   const handleCreate = () => {
     const phrase = generateMnemonic();
@@ -68,15 +84,26 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     }
     indices.sort((a, b) => a - b);
     setConfirmIndices(indices);
-    setConfirmWords(new Array(3).fill(''));
+    setSelectedWords([null, null, null]);
+    setCurrentConfirmIdx(0);
     setStep('show-phrase');
+  };
+
+  const handleWordSelect = (word: string) => {
+    const updated = [...selectedWords];
+    updated[currentConfirmIdx] = word;
+    setSelectedWords(updated);
+    setError('');
+    if (currentConfirmIdx < 2) {
+      setCurrentConfirmIdx(currentConfirmIdx + 1);
+    }
   };
 
   const handlePhraseConfirmed = async () => {
     const words = mnemonic.split(' ');
     for (let i = 0; i < confirmIndices.length; i++) {
-      if (confirmWords[i].trim().toLowerCase() !== words[confirmIndices[i]].toLowerCase()) {
-        setError(`Word #${confirmIndices[i] + 1} is incorrect`);
+      if (!selectedWords[i] || selectedWords[i] !== words[confirmIndices[i]]) {
+        setError(`Word #${confirmIndices[i] + 1} is incorrect. Tap the correct word.`);
         return;
       }
     }
@@ -159,7 +186,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setDomainError('');
     setDomainLoading(true);
     try {
-      // Register on-chain via mythic.sh relayer
       const res = await fetch('https://mythic.sh/api/register-domain', {
         method: 'POST',
         headers: {
@@ -178,7 +204,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         setDomainLoading(false);
         return;
       }
-      // Save to extension storage
       await saveMythDomain(`${name}.myth`);
       setDomainSuccess(`${name}.myth`);
       setDomainError('');
@@ -364,6 +389,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm your password"
+              onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
               className="w-full bg-surface-elevated border border-subtle px-3 py-2.5 text-sm text-text-heading placeholder:text-text-disabled focus:outline-none focus:border-rose"
             />
           </div>
@@ -412,40 +438,78 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     );
   }
 
-  // ─── Confirm Phrase ───
+  // ─── Confirm Phrase — WORD PICKER ───
   if (step === 'confirm-phrase') {
     return (
       <div className="flex flex-col h-full px-6 pt-6">
-        <h2 className="font-display text-xl font-bold text-text-heading mb-2">Confirm Phrase</h2>
-        <p className="text-xs text-text-muted mb-6">
-          Enter the following words from your recovery phrase.
+        <h2 className="font-display text-xl font-bold text-text-heading mb-2">Verify Phrase</h2>
+        <p className="text-xs text-text-muted mb-4">
+          Tap the correct word for each position to verify you saved your phrase.
         </p>
 
-        <div className="space-y-4">
+        {/* Progress indicator */}
+        <div className="flex gap-2 mb-5">
           {confirmIndices.map((wordIdx, i) => (
-            <div key={wordIdx}>
-              <label className="block text-xs text-text-muted mb-1.5">Word #{wordIdx + 1}</label>
-              <input
-                type="text"
-                value={confirmWords[i]}
-                onChange={(e) => {
-                  const updated = [...confirmWords];
-                  updated[i] = e.target.value;
-                  setConfirmWords(updated);
-                }}
-                placeholder={`Enter word #${wordIdx + 1}`}
-                className="w-full bg-surface-elevated border border-subtle px-3 py-2.5 text-sm font-mono text-text-heading placeholder:text-text-disabled focus:outline-none focus:border-rose"
-              />
-            </div>
+            <button
+              key={wordIdx}
+              onClick={() => setCurrentConfirmIdx(i)}
+              className={`flex-1 py-2 text-center text-xs font-mono transition-all ${
+                currentConfirmIdx === i
+                  ? 'border-2 border-rose bg-rose/10 text-rose'
+                  : selectedWords[i]
+                  ? 'border border-green-500/40 bg-green-500/5 text-green-400'
+                  : 'border border-subtle bg-surface-elevated text-text-muted'
+              }`}
+            >
+              <span className="block text-[10px] text-text-disabled">Word #{wordIdx + 1}</span>
+              <span className="block mt-0.5">{selectedWords[i] || '---'}</span>
+            </button>
           ))}
         </div>
 
-        {error && <p className="text-xs text-error mt-2">{error}</p>}
+        {/* Word options for current slot */}
+        <p className="text-xs text-text-muted mb-2">
+          Select word #{confirmIndices[currentConfirmIdx] + 1}:
+        </p>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {wordOptions[currentConfirmIdx]?.map((word) => (
+            <button
+              key={word}
+              onClick={() => handleWordSelect(word)}
+              className={`py-2.5 px-3 text-sm font-mono text-center transition-all ${
+                selectedWords[currentConfirmIdx] === word
+                  ? 'bg-rose/15 border-2 border-rose text-rose'
+                  : 'bg-surface-elevated border border-subtle text-text-heading hover:border-rose/50'
+              }`}
+            >
+              {word}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-xs text-error mb-2">{error}</p>}
 
         <div className="mt-auto pb-6">
-          <Button variant="primary" fullWidth size="lg" onClick={handlePhraseConfirmed} disabled={loading}>
+          <Button
+            variant="primary"
+            fullWidth
+            size="lg"
+            onClick={handlePhraseConfirmed}
+            disabled={loading || selectedWords.some(w => w === null)}
+          >
             {loading ? 'Creating Wallet...' : 'Confirm & Create Wallet'}
           </Button>
+          <button
+            onClick={() => {
+              setStep('show-phrase');
+              setSelectedWords([null, null, null]);
+              setCurrentConfirmIdx(0);
+              setError('');
+            }}
+            className="w-full mt-2 py-2 text-xs text-text-muted hover:text-text-body transition-colors"
+          >
+            Show phrase again
+          </button>
         </div>
       </div>
     );
@@ -486,6 +550,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm your password"
+              onKeyDown={(e) => e.key === 'Enter' && (isPhrase ? handleImportPhraseSubmit() : handleImportPrivateKeySubmit())}
               className="w-full bg-surface-elevated border border-subtle px-3 py-2.5 text-sm text-text-heading placeholder:text-text-disabled focus:outline-none focus:border-rose"
             />
           </div>

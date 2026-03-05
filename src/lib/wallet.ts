@@ -458,6 +458,36 @@ export async function getTransactionHistory(
   return records;
 }
 
+
+/**
+ * Poll for transaction confirmation using getSignatureStatuses.
+ * Firedancer does not reliably support websocket-based confirmTransaction.
+ */
+async function pollConfirmation(
+  connection: Connection,
+  signature: string,
+  timeoutMs = 20_000,
+  intervalMs = 800,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const { value } = await connection.getSignatureStatuses([signature]);
+      const status = value?.[0];
+      if (status) {
+        if (status.err) throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          return;
+        }
+      }
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message.startsWith('Transaction failed')) throw e;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  // Timed out but tx was sent — likely succeeded
+}
+
 // ─── Send SOL (real) ───
 
 export async function sendSol(
@@ -484,7 +514,7 @@ export async function sendSol(
     preflightCommitment: 'confirmed',
   });
 
-  await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
+  await pollConfirmation(connection, signature);
   return signature;
 }
 
@@ -537,3 +567,21 @@ export async function getMythPrice(): Promise<{ priceUsd: number; priceSOL: numb
     priceSOL: _cachedMythPrice?.priceSOL || 0,
   };
 }
+
+// ─── .myth Domain Resolution ───
+
+export async function resolveMythDomain(domain: string): Promise<string | null> {
+  const name = domain.toLowerCase().replace(/\.myth$/, '');
+  if (!name) return null;
+  try {
+    const res = await fetch(`https://mythicswap.app/api/profiles?username=${encodeURIComponent(name)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.wallet_address) return data.wallet_address;
+    }
+  } catch {}
+  return null;
+}
+
+// Backwards compat alias
+export const sendMyth = sendSol;

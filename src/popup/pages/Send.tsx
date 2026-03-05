@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from '../components/Button';
 import {
   truncateAddress,
   getConnection,
   sendSol,
+  resolveMythDomain,
   NETWORKS,
   type TokenBalance,
   type NetworkId,
@@ -28,6 +29,8 @@ export default function Send({ address, network, tokens, solPrice, mythPrice, on
   const unitPrice = isL2 ? mythPrice : solPrice;
 
   const [recipient, setRecipient] = useState('');
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
   const [amount, setAmount] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [password, setPassword] = useState('');
@@ -39,13 +42,39 @@ export default function Send({ address, network, tokens, solPrice, mythPrice, on
   const balance = nativeToken?.balance || 0;
   const estimatedFee = 0.000005;
   const parsedAmount = parseFloat(amount) || 0;
-  const isValid = recipient.length >= 32 && parsedAmount > 0 && parsedAmount <= balance - estimatedFee;
+  const destinationAddress = resolvedAddress || recipient;
+  const isValid = destinationAddress.length >= 32 && parsedAmount > 0 && parsedAmount <= balance - estimatedFee;
 
   const net = NETWORKS[network];
   const explorerTxUrl = (sig: string) =>
     net.chain === 'solana'
       ? `${net.explorerUrl}/tx/${sig}`
       : `${net.explorerUrl}/tx/${sig}`;
+
+  // Resolve .myth domains
+  useEffect(() => {
+    const trimmed = recipient.trim();
+    if (trimmed.endsWith('.myth')) {
+      setResolving(true);
+      setResolvedAddress(null);
+      const timer = setTimeout(async () => {
+        try {
+          const addr = await resolveMythDomain(trimmed);
+          setResolvedAddress(addr);
+          if (!addr) setError('Domain not found');
+          else setError('');
+        } catch {
+          setResolvedAddress(null);
+        } finally {
+          setResolving(false);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setResolvedAddress(null);
+      setResolving(false);
+    }
+  }, [recipient]);
 
   const handleMax = () => {
     setAmount(Math.max(0, balance - 0.01).toFixed(6));
@@ -79,7 +108,7 @@ export default function Send({ address, network, tokens, solPrice, mythPrice, on
       }
 
       const conn = getConnection(network);
-      const sig = await sendSol(conn, keypair, recipient.trim(), parsedAmount);
+      const sig = await sendSol(conn, keypair, destinationAddress.trim(), parsedAmount);
       setTxSig(sig);
       setSent(true);
       setTimeout(onSent, 3000);
@@ -99,7 +128,7 @@ export default function Send({ address, network, tokens, solPrice, mythPrice, on
         </div>
         <h2 className="font-display text-xl font-bold text-text-heading mb-2">Transaction Sent</h2>
         <p className="text-sm text-text-muted text-center mb-3">
-          {amount} {nativeSymbol} sent to {truncateAddress(recipient, 6)}
+          {amount} {nativeSymbol} sent to {resolvedAddress ? recipient : truncateAddress(destinationAddress, 6)}
         </p>
         <button
           onClick={() => {
@@ -139,7 +168,17 @@ export default function Send({ address, network, tokens, solPrice, mythPrice, on
             </div>
             <div className="flex justify-between mb-3">
               <span className="text-xs text-text-muted">To</span>
-              <span className="font-mono text-xs text-text-body">{truncateAddress(recipient, 6)}</span>
+              <div className="text-right">
+                {resolvedAddress ? (
+                  <>
+                    <span className="text-xs text-rose font-semibold">{recipient}</span>
+                    <br />
+                    <span className="font-mono text-[10px] text-text-disabled">{truncateAddress(resolvedAddress, 6)}</span>
+                  </>
+                ) : (
+                  <span className="font-mono text-xs text-text-body">{truncateAddress(destinationAddress, 6)}</span>
+                )}
+              </div>
             </div>
             <div className="border-t border-subtle my-3" />
             <div className="flex justify-between mb-3">
@@ -211,15 +250,23 @@ export default function Send({ address, network, tokens, solPrice, mythPrice, on
         </div>
 
         <div>
-          <label className="block text-xs text-text-muted mb-1.5 font-sans">Recipient Address</label>
+          <label className="block text-xs text-text-muted mb-1.5 font-sans">Recipient Address or .myth Domain</label>
           <input
             type="text"
             value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-            placeholder={isL2 ? 'Enter address or .myth name...' : 'Enter Solana address...'}
+            onChange={(e) => { setRecipient(e.target.value); setError(''); }}
+            placeholder={isL2 ? 'address or name.myth' : 'Enter Solana address...'}
             spellCheck={false}
             className="w-full bg-surface-elevated border border-subtle px-3 py-2.5 text-sm font-mono text-text-heading placeholder:text-text-disabled focus:outline-none focus:border-rose"
           />
+          {resolving && (
+            <p className="text-[10px] text-text-muted mt-1">Resolving domain...</p>
+          )}
+          {resolvedAddress && (
+            <p className="text-[10px] text-green-400 mt-1">
+              Resolved: {truncateAddress(resolvedAddress, 6)}
+            </p>
+          )}
         </div>
 
         <div>
@@ -254,7 +301,7 @@ export default function Send({ address, network, tokens, solPrice, mythPrice, on
       </div>
 
       <div className="px-4 pb-4">
-        <Button variant="primary" fullWidth size="lg" disabled={!isValid} onClick={() => setShowConfirm(true)}>
+        <Button variant="primary" fullWidth size="lg" disabled={!isValid || resolving} onClick={() => setShowConfirm(true)}>
           Review Transaction
         </Button>
       </div>
